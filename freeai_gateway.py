@@ -136,3 +136,42 @@ class FreeIAGateway:
         with sqlite3.connect(self.quota.db_path) as conn:
             conn.row_factory = sqlite3.Row
             return [dict(r) for r in conn.execute("SELECT * FROM quotas").fetchall()]
+
+
+if __name__ == "__main__":
+    import sys
+
+    print("FreeIAGateway — CLI interactif")
+    print("Commandes : /reset  /stats  /quit\n")
+
+    session = input("Session ID [default]: ").strip() or "default"
+    gw = FreeIAGateway(session_id=session)
+    print(f"Session '{session}' démarrée.\n")
+
+    while True:
+        try:
+            user_input = input("Vous : ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nAu revoir.")
+            sys.exit(0)
+
+        if not user_input:
+            continue
+        if user_input == "/quit":
+            print("Au revoir.")
+            break
+        if user_input == "/reset":
+            gw.reset_conversation()
+            print("[Conversation réinitialisée]\n")
+            continue
+        if user_input == "/stats":
+            for s in gw.get_stats():
+                print(f"  {s['provider']:15} {s['requests_used']:>4} req  {s['tokens_used']:>8} tok  (date: {s['date']})")
+            print()
+            continue
+
+        try:
+            answer = gw.ask(user_input)
+            print(f"\nAssistant : {answer}\n")
+        except RuntimeError as e:
+            print(f"[ERREUR] {e}\n")
