@@ -84,3 +84,25 @@ def test_is_available_false_when_tokens_exceeded(qm, db_path):
         conn.execute("UPDATE quotas SET tokens_used=500001 WHERE provider=?", ("groq",))
         conn.commit()
     assert qm.is_available("groq", req_limit=500, tok_limit=500_000) is False
+
+
+def test_save_and_get_history(qm):
+    qm.save_message("sess1", "user", "Bonjour")
+    qm.save_message("sess1", "assistant", "Hello")
+    history = qm.get_history("sess1")
+    assert history == [
+        {"role": "user", "content": "Bonjour"},
+        {"role": "assistant", "content": "Hello"},
+    ]
+
+
+def test_get_history_empty_for_new_session(qm):
+    assert qm.get_history("new_session") == []
+
+
+def test_delete_history_removes_only_target_session(qm):
+    qm.save_message("sess1", "user", "message A")
+    qm.save_message("sess2", "user", "message B")
+    qm.delete_history("sess1")
+    assert qm.get_history("sess1") == []
+    assert len(qm.get_history("sess2")) == 1

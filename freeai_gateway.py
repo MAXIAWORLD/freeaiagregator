@@ -73,3 +73,24 @@ class QuotaManager:
         if row is None:
             return True
         return row[0] < req_limit and row[1] < tok_limit
+
+    def save_message(self, session_id: str, role: str, content: str):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO conversations (session_id, role, content) VALUES (?, ?, ?)",
+                (session_id, role, content),
+            )
+            conn.commit()
+
+    def get_history(self, session_id: str) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT role, content FROM conversations WHERE session_id=? ORDER BY timestamp ASC",
+                (session_id,),
+            ).fetchall()
+        return [{"role": r[0], "content": r[1]} for r in rows]
+
+    def delete_history(self, session_id: str):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("DELETE FROM conversations WHERE session_id=?", (session_id,))
+            conn.commit()
