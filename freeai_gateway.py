@@ -55,3 +55,21 @@ class QuotaManager:
                     VALUES (?, 0, 0, ?)
                 """, (provider, today))
                 conn.commit()
+
+    def update_usage(self, provider: str, tokens: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                UPDATE quotas SET requests_used = requests_used + 1,
+                                  tokens_used = tokens_used + ?
+                WHERE provider = ?
+            """, (tokens, provider))
+            conn.commit()
+
+    def is_available(self, provider: str, req_limit: int, tok_limit: int) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT requests_used, tokens_used FROM quotas WHERE provider=?", (provider,)
+            ).fetchone()
+        if row is None:
+            return True
+        return row[0] < req_limit and row[1] < tok_limit

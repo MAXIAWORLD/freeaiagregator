@@ -54,3 +54,33 @@ def test_reset_daily_does_not_reset_if_same_day(qm, db_path):
     with sqlite3.connect(db_path) as conn:
         row = conn.execute("SELECT requests_used, tokens_used FROM quotas WHERE provider=?", ("google",)).fetchone()
     assert row == (10, 500)
+
+
+def test_update_usage_increments_counters(qm, db_path):
+    qm.reset_daily_if_needed("groq")
+    qm.update_usage("groq", tokens=150)
+    qm.update_usage("groq", tokens=50)
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute("SELECT requests_used, tokens_used FROM quotas WHERE provider=?", ("groq",)).fetchone()
+    assert row == (2, 200)
+
+
+def test_is_available_true_when_under_limit(qm):
+    qm.reset_daily_if_needed("groq")
+    assert qm.is_available("groq", req_limit=500, tok_limit=500_000) is True
+
+
+def test_is_available_false_when_requests_exceeded(qm, db_path):
+    qm.reset_daily_if_needed("groq")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE quotas SET requests_used=500 WHERE provider=?", ("groq",))
+        conn.commit()
+    assert qm.is_available("groq", req_limit=500, tok_limit=500_000) is False
+
+
+def test_is_available_false_when_tokens_exceeded(qm, db_path):
+    qm.reset_daily_if_needed("groq")
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE quotas SET tokens_used=500001 WHERE provider=?", ("groq",))
+        conn.commit()
+    assert qm.is_available("groq", req_limit=500, tok_limit=500_000) is False
