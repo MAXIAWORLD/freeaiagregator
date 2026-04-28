@@ -173,3 +173,27 @@ def test_ask_skips_exhausted_provider(gw, db_path):
     first_model = mock_c.call_args_list[0][1]["model"]
     assert "groq" in first_model
     assert result == "ok"
+
+
+def test_get_stats_returns_list(gw):
+    with patch("freeai_gateway.litellm.completion", return_value=_make_response()):
+        gw.ask("test")
+    stats = gw.get_stats()
+    assert isinstance(stats, list)
+    assert len(stats) >= 1
+    assert "provider" in stats[0]
+    assert "requests_used" in stats[0]
+    assert "tokens_used" in stats[0]
+
+
+def test_reset_conversation_clears_history(gw):
+    with patch("freeai_gateway.litellm.completion", return_value=_make_response()):
+        gw.ask("message test")
+    gw.reset_conversation()
+    assert gw.quota.get_history("test") == []
+
+
+def test_reset_conversation_other_session(gw):
+    gw.quota.save_message("autre", "user", "msg")
+    gw.reset_conversation("autre")
+    assert gw.quota.get_history("autre") == []
