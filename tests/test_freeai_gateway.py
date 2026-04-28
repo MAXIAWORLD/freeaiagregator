@@ -197,3 +197,43 @@ def test_reset_conversation_other_session(gw):
     gw.quota.save_message("autre", "user", "msg")
     gw.reset_conversation("autre")
     assert gw.quota.get_history("autre") == []
+
+
+# Fix 1 — Historique corrompu sur échec total
+def test_ask_does_not_save_history_on_failure(gw):
+    with patch("freeai_gateway.litellm.completion", side_effect=litellm.RateLimitError(message="429", llm_provider="x", model="y")):
+        with pytest.raises(RuntimeError):
+            gw.ask("question perdue")
+    assert gw.quota.get_history("test") == []
+
+
+# Fix 2 — Couplage get_stats()
+def test_quota_manager_get_stats_returns_list(qm):
+    qm.reset_daily_if_needed("google")
+    qm.update_usage("google", tokens=200)
+    stats = qm.get_stats()
+    assert isinstance(stats, list)
+    assert any(s["provider"] == "google" for s in stats)
+    assert stats[0]["requests_used"] is not None
+
+
+# Fix 3 — Atomicité reset+check
+def test_reset_and_check_resets_and_returns_true_if_available(qm, db_path):
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("INSERT INTO quotas (provider, requests_used, tokens_used, date) VALUES (?, 50, 9000, ?)", ("mistral", yesterday))
+        conn.commit()
+    result = qm.reset_and_check("mistral", req_limit=100, tok_limit=200_000)
+    assert result is True
+    with sqlite3.connect(db_path) as conn:
+        row = conn.execute("SELECT requests_used, tokens_used FROM quotas WHERE provider=?", ("mistral",)).fetchone()
+    assert row == (0, 0)
+
+
+def test_reset_and_check_returns_false_if_quota_full(qm, db_path):
+    today = datetime.date.today().isoformat()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("INSERT INTO quotas (provider, requests_used, tokens_used, date) VALUES (?, 100, 0, ?)", ("mistral", today))
+        conn.commit()
+    result = qm.reset_and_check("mistral", req_limit=100, tok_limit=200_000)
+    assert result is False

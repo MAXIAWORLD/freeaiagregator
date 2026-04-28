@@ -95,6 +95,26 @@ class QuotaManager:
             conn.execute("DELETE FROM conversations WHERE session_id=?", (session_id,))
             conn.commit()
 
+    def get_stats(self) -> list[dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            return [dict(r) for r in conn.execute("SELECT * FROM quotas").fetchall()]
+
+    def reset_and_check(self, provider: str, req_limit: int, tok_limit: int) -> bool:
+        today = datetime.date.today().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT date, requests_used, tokens_used FROM quotas WHERE provider=?", (provider,)
+            ).fetchone()
+            if row is None or row[0] != today:
+                conn.execute(
+                    "INSERT OR REPLACE INTO quotas (provider, requests_used, tokens_used, date) VALUES (?, 0, 0, ?)",
+                    (provider, today),
+                )
+                conn.commit()
+                return True
+            return row[1] < req_limit and row[2] < tok_limit
+
 
 class FreeIAGateway:
     def __init__(self, session_id: str = "default", db_path: str = "gateway.db"):
@@ -102,13 +122,11 @@ class FreeIAGateway:
         self.quota = QuotaManager(db_path)
 
     def ask(self, prompt: str, system_prompt: str = "Tu es un assistant utile.") -> str:
-        self.quota.save_message(self.session_id, "user", prompt)
         history = self.quota.get_history(self.session_id)
-        messages = [{"role": "system", "content": system_prompt}] + history
+        messages = [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": prompt}]
 
         for p in PROVIDERS:
-            self.quota.reset_daily_if_needed(p["key"])
-            if not self.quota.is_available(p["key"], p["req_limit"], p["tok_limit"]):
+            if not self.quota.reset_and_check(p["key"], p["req_limit"], p["tok_limit"]):
                 logger.info(f"Quota épuisé pour {p['key']}, skip.")
                 continue
             try:
@@ -117,6 +135,7 @@ class FreeIAGateway:
                 answer = resp.choices[0].message.content
                 tokens = resp.usage.total_tokens
                 self.quota.update_usage(p["key"], tokens)
+                self.quota.save_message(self.session_id, "user", prompt)
                 self.quota.save_message(self.session_id, "assistant", answer)
                 logger.info(f"Succès {p['key']} ({tokens} tokens)")
                 return answer
@@ -133,9 +152,7 @@ class FreeIAGateway:
         self.quota.delete_history(session_id or self.session_id)
 
     def get_stats(self) -> list[dict]:
-        with sqlite3.connect(self.quota.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            return [dict(r) for r in conn.execute("SELECT * FROM quotas").fetchall()]
+        return self.quota.get_stats()
 
 
 if __name__ == "__main__":
