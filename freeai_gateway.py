@@ -12,8 +12,8 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(nam
 logger = logging.getLogger("FreeIAGateway")
 
 PROVIDERS = [
-    {"model": "gemini/gemini-2.0-flash-exp", "key": "google",       "req_limit": 1500, "tok_limit": 1_000_000},
-    {"model": "groq/llama-3.1-70b-versatile","key": "groq",         "req_limit": 500,  "tok_limit": 500_000},
+    {"model": "gemini/gemini-2.0-flash",      "key": "google",       "req_limit": 1500, "tok_limit": 1_000_000},
+    {"model": "groq/llama-3.3-70b-versatile","key": "groq",         "req_limit": 14400,"tok_limit": 500_000},
     {"model": "mistral/mistral-large-latest", "key": "mistral",      "req_limit": 100,  "tok_limit": 200_000},
     {"model": "huggingface/meta-llama/Llama-3.1-70B-Instruct", "key": "huggingface", "req_limit": 1000, "tok_limit": 500_000},
 ]
@@ -146,6 +146,27 @@ class FreeIAGateway:
             except Exception as e:
                 logger.warning(f"Erreur inattendue {p['key']}: {e}")
 
+        raise RuntimeError("Tous les providers ont échoué ou épuisé leurs quotas.")
+
+    def ask_with_messages(self, messages: list[dict]) -> str:
+        for p in PROVIDERS:
+            if not self.quota.reset_and_check(p["key"], p["req_limit"], p["tok_limit"]):
+                logger.info(f"Quota épuisé pour {p['key']}, skip.")
+                continue
+            try:
+                logger.info(f"Appel {p['model']}...")
+                resp = litellm.completion(model=p["model"], messages=messages, timeout=30)
+                answer = resp.choices[0].message.content
+                tokens = resp.usage.total_tokens
+                self.quota.update_usage(p["key"], tokens)
+                logger.info(f"Succès {p['key']} ({tokens} tokens)")
+                return answer
+            except litellm.RateLimitError:
+                logger.warning(f"429 {p['key']}, fallback suivant.")
+            except litellm.AuthenticationError:
+                logger.warning(f"Auth error {p['key']}, fallback suivant.")
+            except Exception as e:
+                logger.warning(f"Erreur inattendue {p['key']}: {e}")
         raise RuntimeError("Tous les providers ont échoué ou épuisé leurs quotas.")
 
     def reset_conversation(self, session_id: Optional[str] = None):
