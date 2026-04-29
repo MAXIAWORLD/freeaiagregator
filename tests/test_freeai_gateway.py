@@ -237,3 +237,21 @@ def test_reset_and_check_returns_false_if_quota_full(qm, db_path):
         conn.commit()
     result = qm.reset_and_check("mistral", req_limit=100, tok_limit=200_000)
     assert result is False
+
+
+def test_providers_include_cerebras_and_sambanova():
+    from freeai_gateway import PROVIDERS
+    keys = {p["key"] for p in PROVIDERS}
+    assert "cerebras" in keys, "cerebras manquant dans PROVIDERS"
+    assert "sambanova" in keys, "sambanova manquant dans PROVIDERS"
+
+
+def test_all_providers_have_required_fields():
+    from freeai_gateway import PROVIDERS
+    for p in PROVIDERS:
+        assert "model" in p
+        assert "key" in p
+        assert "req_limit" in p
+        assert "tok_limit" in p
+        assert isinstance(p["req_limit"], int)
+        assert isinstance(p["tok_limit"], int)

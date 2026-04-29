@@ -1,0 +1,9 @@
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json
+
+.env
+gateway.db
+__pycache__/
+*.pyc
