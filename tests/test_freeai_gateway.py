@@ -163,9 +163,9 @@ def test_ask_saves_history(gw):
 
 def test_ask_skips_exhausted_provider(gw, db_path):
     qm = gw.quota
-    qm.reset_daily_if_needed("google")
+    qm.reset_daily_if_needed("cerebras")
     with sqlite3.connect(db_path) as conn:
-        conn.execute("UPDATE quotas SET requests_used=1500 WHERE provider='google'")
+        conn.execute("UPDATE quotas SET requests_used=5000 WHERE provider='cerebras'")
         conn.commit()
 
     with patch("freeai_gateway.litellm.completion", return_value=_make_response("ok")) as mock_c:

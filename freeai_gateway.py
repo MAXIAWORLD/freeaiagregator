@@ -12,12 +12,12 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(levelname)s %(nam
 logger = logging.getLogger("FreeIAGateway")
 
 PROVIDERS = [
-    {"model": "gemini/gemini-2.0-flash",                           "key": "google",      "req_limit": 1500,  "tok_limit": 1_000_000},
-    {"model": "groq/llama-3.3-70b-versatile",                      "key": "groq",        "req_limit": 14400, "tok_limit": 500_000},
     {"model": "cerebras/llama3.3-70b",                             "key": "cerebras",    "req_limit": 5000,  "tok_limit": 1_000_000},
+    {"model": "groq/llama-3.3-70b-versatile",                      "key": "groq",        "req_limit": 14400, "tok_limit": 500_000},
     {"model": "sambanova/Meta-Llama-3.3-70B-Instruct",             "key": "sambanova",   "req_limit": 1000,  "tok_limit": 1_000_000},
-    {"model": "mistral/mistral-large-latest",                      "key": "mistral",     "req_limit": 100,   "tok_limit": 200_000},
+    {"model": "gemini/gemini-2.0-flash",                           "key": "google",      "req_limit": 1500,  "tok_limit": 1_000_000},
     {"model": "huggingface/meta-llama/Llama-3.1-70B-Instruct",     "key": "huggingface", "req_limit": 1000,  "tok_limit": 500_000},
+    {"model": "mistral/mistral-large-latest",                      "key": "mistral",     "req_limit": 100,   "tok_limit": 200_000},
 ]
 
 
