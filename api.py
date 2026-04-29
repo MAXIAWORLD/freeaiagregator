@@ -1,8 +1,10 @@
+import json
 import time
 import uuid
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from freeai_gateway import FreeIAGateway
@@ -39,10 +41,36 @@ def chat_completions(req: ChatRequest):
         answer = gateway.ask_with_messages(messages)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+    cid = f"chatcmpl-{uuid.uuid4().hex[:8]}"
+    created = int(time.time())
+
+    if req.stream:
+        def event_stream():
+            chunk = {
+                "id": cid,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": "freeai-gateway",
+                "choices": [{"index": 0, "delta": {"role": "assistant", "content": answer}, "finish_reason": None}],
+            }
+            yield f"data: {json.dumps(chunk)}\n\n"
+            done = {
+                "id": cid,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": "freeai-gateway",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            }
+            yield f"data: {json.dumps(done)}\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
     return {
-        "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
+        "id": cid,
         "object": "chat.completion",
-        "created": int(time.time()),
+        "created": created,
         "model": "freeai-gateway",
         "choices": [
             {
